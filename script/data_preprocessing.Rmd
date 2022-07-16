@@ -1,0 +1,101 @@
+---
+title: "gender_stereotype"
+author: "Yuhan Zhang"
+date: "7/10/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(brms)
+library(tidyr)
+```
+
+# Import data
+
+```{r}
+#data = read.csv('/Users/zhangyuhan/Documents/PhD/Research/22-xinrui/data/raw-data.csv')
+data = read.csv('../data/raw-data.csv')
+data = data[-2,]
+```
+
+# Screen the data
+
+The steps involve: (1) change the column name, (2) select the columns, (3) set the subject screening threshold
+
+Out of 289 questionnaires, only 172 passed through the test.
+
+```{r}
+colnames(data)[27] = "student.female"
+data_slim = data %>% 
+  select("Status", "Finished", "ResponseId", "practice.trial.1":"询问")
+
+# clean every space and punctuation in the character column
+data_slim = data_slim %>% 
+  mutate(across(everything(), as.character))
+data_slim = as.data.frame(apply(data_slim,2,function(x)gsub('[[:punct:] ]+','',x)))
+data_slim = as.data.frame(apply(data_slim,2,function(x)gsub('\\s+', '',x)))
+
+# use the filler item to detect attention
+data_trim = data_slim %>% 
+  mutate(number_failed = case_when(
+    filler.1 != "幸福" ~ 1, 
+  TRUE ~ 0)) %>% 
+  mutate(number_failed = (number_failed + if_else(filler.2 != "排队", true = +1, false = 0, missing = +0))) %>% 
+  mutate(number_failed = (number_failed + if_else(filler.3 != "认同", true = +1, false = 0, missing = +0))) %>% 
+  mutate(number_failed = (number_failed + if_else(filler.4 != "时间", true = +1, false = 0, missing = +0))) %>% 
+  mutate(number_failed = (number_failed + if_else(filler.5 != "所有", true = +1, false = 0, missing = +0))) %>% 
+  mutate(number_failed = (number_failed + if_else(filler.6 != "这", true = +1, false = 0, missing = +0))) %>% 
+  mutate(number_failed = (number_failed + if_else(filler.7 != "有", true = +1, false = 0, missing = +0))) %>% 
+  mutate(number_failed = (number_failed + if_else(filler.8 != "香味", true = +1, false = 0, missing = +0))) %>% 
+  mutate(number_failed = (number_failed + if_else(filler.9 != "大约", true = +1, false = 0, missing = +0))) %>% 
+  mutate(number_failed = (number_failed + if_else(filler.10 != "天气", true = +1, false = 0, missing = +0))) %>% 
+  mutate(number_failed = (number_failed + if_else(filler.11 != "三", true = +1, false = 0, missing = +0))) %>% 
+  mutate(number_failed = (number_failed + if_else(filler.12 != "着", true = +1, false = 0, missing = +0))) %>% 
+  mutate(number_failed = (number_failed + if_else(filler.13 != "写生", true = +1, false = 0, missing = +0))) %>% 
+  mutate(number_failed = (number_failed + if_else(filler.14 != "光", true = +1, false = 0, missing = +0))) %>% 
+  mutate(number_failed = (number_failed + if_else(filler.15 != "许多", true = +1, false = 0, missing = +0))) %>% 
+  mutate(number_failed = (number_failed + if_else(filler.16 != "梅花", true = +1, false = 0, missing = +0))) %>% 
+  mutate(number_failed = (number_failed + if_else(filler.17 != "水果", true = +1, false = 0, missing = +0))) %>% 
+  mutate(number_failed = (number_failed + if_else(filler.18 != "也", true = +1, false = 0, missing = +0))) %>% 
+  mutate(number_failed = (number_failed + if_else(filler.19 != "七", true = +1, false = 0, missing = +0))) %>% 
+  mutate(number_failed = (number_failed + if_else(filler.20 != "北", true = +1, false = 0, missing = +0))) %>% 
+  mutate(number_failed = (number_failed + if_else(filler.21 != "少年", true = +1, false = 0, missing = +0))) %>% 
+  mutate(number_failed = (number_failed + if_else(filler.22 != "红", true = +1, false = 0, missing = +0))) %>% 
+  mutate(number_failed = (number_failed + if_else(filler.23 != "是", true = +1, false = 0, missing = +0))) %>% 
+  mutate(number_failed = (number_failed + if_else(filler.24 != "儿童", true = +1, false = 0, missing = +0))) %>% 
+  mutate(number_failed = (number_failed + if_else(practice.trial.1 != "花园", true = +1, false = 0, missing = +0))) %>% 
+  mutate(number_failed = (number_failed + if_else(practice.trial.2 != "有", true = +1, false = 0, missing = +0)))
+
+# use external criteria to delete
+data_trimed = data_trim %>% 
+  filter(Status == "IPAddress",
+         Finished == "True",
+         number_failed <= 2)
+
+table(data_trimed[, c("学习阶段")])
+```
+
+```{r}
+table(data_trimed[, c("学习阶段", "性别")])
+```
+
+# Sample the data
+```{r}
+elementary = data_trimed[which(data_trimed$学习阶段=="小学阶段"),]
+high_school = data_trimed[sample(which(data_trimed$学习阶段=="高中阶段"), length(elementary$ResponseId)),]
+data_wide = rbind(elementary, high_school)
+table(data_wide[, c("学习阶段", "性别")])
+```
+
+# Create a long format of the data
+```{r}
+data_long = data_wide %>%
+  pivot_longer("practice.trial.1":"filler.24", names_to="trialType",values_to="textInput")
+
+# save a clean csv form
+write.csv(data_long, "../data/data_ready_for_analysis.csv")
+```
+

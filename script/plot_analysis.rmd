@@ -1,0 +1,82 @@
+---
+title: "data_analysis"
+author: "Yuhan Zhang"
+date: "7/10/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(brms)
+library(tidyr)
+```
+
+```{r}
+data = read.csv('../data/data_ready_for_analysis.csv')
+data$trialType = gsub('.\\d+$', '', data$trialType)
+data_critical = data %>% 
+  filter(trialType != "filler") %>% 
+  filter(trialType != "practice.trial") %>% 
+  separate(trialType, into=c("career", "condition"), sep="\\.", remove=TRUE)
+```
+
+```{r}
+table(data_critical$textInput)
+```
+
+
+```{r}
+answers = c("他","他他它","他她","她","她他","她它他","它","说她")
+data_critical = data_critical %>% 
+  filter(textInput %in% answers)
+table(data_critical[,c("career", "condition")])
+```
+
+```{r}
+encoding = c("masculine", "invalid", "both", "feminine", "both","three","nonhuman","invalid")
+textInput = c("他","他他它","他她","她","她他","她它他","它","说她")
+encoding_table = data.frame(textInput, encoding)
+
+data_critical = left_join(data_critical, encoding_table, by = 'textInput')
+```
+
+# Show and plot the table
+```{r}
+table(data_critical[, c("encoding","学习阶段","condition")])
+```
+
+```{r}
+data_critical = data_critical %>% 
+  mutate(feminine = if_else(encoding %in% c("both", "three", "feminine"), 1, 0))
+
+feminine_by_career = data_critical %>% 
+  filter(condition == "neutral") %>% 
+  group_by(career, 学习阶段) %>% 
+  summarise(count = length(textInput),
+            feminine = sum(feminine)/count,
+            non_feminine = 1 - feminine)
+
+feminine_by_career = feminine_by_career %>% 
+  mutate(Education = if_else(学习阶段=="小学阶段", "Elementary", "High School"))
+```
+
+```{r}
+f1 = ggplot(data=feminine_by_career, aes(x=Education, y=feminine)) +
+  geom_bar(stat="identity", width=0.5) +
+  geom_hline(yintercept = 0.5, linetype="dashed", color="red") +
+  facet_wrap(vars(career)) +
+  ggtitle("Proportion of feminine pronoun in the neutral condition") +
+  labs(y="Proportion of feminine pronoun") +
+  theme_bw() + 
+  theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=15),
+        plot.title=element_text(size=18),
+        strip.text=element_text(size=15))
+ 
+ggsave('../graph/feminine_career_education.png', f1, device = 'png', width=24, height=15, units="cm", dpi=200) 
+
+```
+
+
